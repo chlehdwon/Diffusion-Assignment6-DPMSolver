@@ -135,8 +135,9 @@ class DPMSolverScheduler(BaseScheduler):
         assert torch.all(s > t), f"timestep s should be larger than timestep t"
         ######## TODO ########
         # DO NOT change the code outside this part.
-        alpha_s = extract(self.dpm_alphas, s, x_s)
-        x_t = x_s
+        alpha_s, sigma_s = extract(self.dpm_alphas, s, x_s), extract(self.dpm_sigmas, s, x_s)
+        alpha_t, sigma_t = extract(self.dpm_alphas, t, x_s), extract(self.dpm_sigmas, t, x_s)
+        x_t = alpha_t / alpha_s * x_s - alpha_t * (sigma_s / alpha_s - sigma_t / alpha_t) * eps_theta
         ######################
         return x_t
 
@@ -161,14 +162,14 @@ class DPMSolverScheduler(BaseScheduler):
         # DO NOT change the code outside this part.
         lambda_i1 = extract(self.dpm_lambdas, t_i1, x_ti1)
         lambda_i = extract(self.dpm_lambdas, t_i, x_ti1)
-        s_i = self.inverse_lambda((lambda_i1 + lambda_i) / 2)
+        s_i = self.inverse_lambda((lambda_i1 + lambda_i)/2)
+        alpha_s, sigma_s = extract(self.dpm_alphas, s_i, x_ti1), extract(self.dpm_sigmas, s_i, x_ti1)
+        alpha_i1, alpha_i, sigma_i = extract(self.dpm_alphas, t_i1, x_ti1), extract(self.dpm_alphas, t_i, x_ti1), extract(self.dpm_sigmas, t_i, x_ti1)
+        h_i = lambda_i - lambda_i1
+        u_i = alpha_s / alpha_i1 * x_ti1 - sigma_s * (torch.exp(h_i / 2) - 1) * eps_theta
 
-        # An example of computing noise prediction inside the function.
-        # In Task 2, you need to make it as CFG sampling.
-        model_output = self.net_forward_fn(
-            x_ti1, t_i1.to(x_ti1.device), class_label=class_label
-        )
-        x_ti = x_ti1
+        eps_theta_s = self.net_forward_fn(u_i, s_i.to(u_i.device))
+        x_ti = alpha_i / alpha_i1 * x_ti1 - sigma_i * (torch.exp(h_i) - 1) * eps_theta_s
         ######################
 
         return x_ti
@@ -231,8 +232,9 @@ class DPMSolverScheduler(BaseScheduler):
         ######## TODO ########
         # DO NOT change the code outside this part.
         # Assignment 6. Implement the DPM forward step.
-        x_t = x_0
-
+        alphas_t = extract(self.dpm_alphas, t, x_0)
+        sigmas_t = extract(self.dpm_sigmas, t, x_0)
+        x_t = alphas_t * x_0 + sigmas_t * eps
         #######################
 
         return x_t, eps

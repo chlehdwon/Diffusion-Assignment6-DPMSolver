@@ -60,6 +60,7 @@ class DiffusionModule(nn.Module):
         # You can copy & paste your implementation of previous Assignments.
         assert class_label is not None
         assert len(class_label) == batch_size, f"len(class_label) != batch_size. {len(class_label)} != {batch_size}"
+        class_label = torch.cat([class_label, torch.zeros_like(class_label)], dim=0)
         #######################
 
         traj = [x_T]
@@ -69,8 +70,18 @@ class DiffusionModule(nn.Module):
             # DO NOT change the code outside this part.
             # Implement the classifier-free guidance.
             # You can copy & paste your implementation of previous Assignments.
-            noise_pred = x_t_prev
-            x_t_prev = self.var_scheduler.step(x_t, t, noise_pred, class_label=class_label)
+            noise_pred_y = self.network(
+                x_t,
+                timestep=t.to(self.device),
+                class_label=class_label[:batch_size],
+            )
+            noise_pred_none = self.network(
+                x_t,
+                timestep=t.to(self.device),
+                class_label=class_label[batch_size:],
+            )
+            noise_pred = (1 + guidance_scale) * noise_pred_y - guidance_scale * noise_pred_none
+            x_t_prev = self.var_scheduler.step(x_t, t, noise_pred)
             #######################
 
 
